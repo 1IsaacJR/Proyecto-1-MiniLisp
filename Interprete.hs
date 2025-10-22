@@ -15,7 +15,7 @@ stp :: (Expr, Env) -> Maybe (Expr, Env)
     stp(Var n ,env) = (lookup n env,env)
     stp(String s,env) = (String s,env)
     -- Agregar funciones como valores dentro del lenguaje
-    stp (Fun p c) env = (Closure p c env, env)
+    stp (Lambda p c) env = (Closure p c env, env)
     --stp(List x:xs, env) = (list x:xs, env)
                                                                                                 --Operadores aritmeticos
     --Reglas de Add
@@ -47,7 +47,15 @@ stp :: (Expr, Env) -> Maybe (Expr, Env)
         return (Div a' b, env')
 
     --Reglas Raiz
-    --Definir booleano para que arranque o ver como
+    --Definir double para que arranque o ver como
+    --Reglas add1
+    stp (Add1 (Num a),env) = Just (Num (a+1),env)
+    stp (Add1 (a),env) = do (a',env') <- stp (a,env)
+        return (Add1 a',env')
+    --Reglas sub1
+    stp (Sub (Num a),env) = Just (Num (a-1),env)
+    stp (Sub (a),env) = do (a',env') <- stp (a,env)
+        return (Sub a',env')
 
     --Reglas de potencia
     stp (Pow (Num a) (Num b), env)
@@ -57,7 +65,6 @@ stp :: (Expr, Env) -> Maybe (Expr, Env)
         return (Pow a' (Num b), env')
     stp (Pow a b, env) = do (b', env') <- stp (b, env)
       return (Pow a b', env')
-
                                                                                                 --Operadores Logicos
     --Ver si se reducen a un valor, no solo a numeros
     -- igualdad
@@ -68,22 +75,38 @@ stp :: (Expr, Env) -> Maybe (Expr, Env)
         return (Eq a' b, env')
 
     -- Menor que
-    stp (Eq (Num a) (Num b), env) = Just (Bool (a < b), env)
-    stp (Eq a (Num b), env) = do (a', env') <- stp (a, env)
-        return (Pow a' (Num b), env')
-    stp (Eq a b, env) = do (b', env') <- stp (a, env)
-        return (Eq a' b, env')
+    stp (Lt (Num a) (Num b), env) = Just (Bool (a < b), env)
+    stp (Lt a (Num b), env) = do (a', env') <- stp (a, env)
+        return (Lt a' (Num b), env')
+    stp (Lt a b, env) = do (b', env') <- stp (a, env)
+        return (Lt a' b, env')
 
     -- Mayor que
-    stp (Eq (Num a) (Num b), env) = Just (Bool (a < b), env) 
-    stp (Eq a (Num b), env) = do (a', env') <- stp (a, env)
-        return (Pow a' (Num b), env')
-    stp (Eq a b, env) = do (b', env') <- stp (a, env)
-        return (Eq a' b, env')
+    stp (Gt (Num a) (Num b), env) = Just (Bool (a > b), env) 
+    stp (Gt a (Num b), env) = do (a', env') <- stp (a, env)
+        return (Gt a' (Num b), env')
+    stp (Gt a b, env) = do (b', env') <- stp (a, env)
+        return (Gt a' b, env')
     --Menor igual que 
+    stp (Leq (Num a) (Num b), env) = Just (Bool (a <= b), env) 
+    stp (Leq a (Num b), env) = do (a', env') <- stp (a, env)
+        return (Leq a' (Num b), env')
+    stp (Leq a b, env) = do (b', env') <- stp (a, env)
+        return (Leq a' b, env')
     --Mayor igual que
-
-                                                                                                --Funciones de listas
+    stp (Geq (Num a) (Num b), env) = Just (Bool (a >= b), env) 
+    stp (Geq a (Num b), env) = do (a', env') <- stp (a, env)
+        return (Geq a' (Num b), env')
+    stp (Geq a b, env) = do (b', env') <- stp (a, env)
+        return (Geq a' b, env')
+    -- DIferente de
+    stp (Neq (Num a) (Num b), env) = Just (Bool (a != b), env) 
+    stp (Neq a (Num b), env) = do (a', env') <- stp (a, env)
+        return (Neq a' (Num b), env')
+    stp (Neq a b, env) = do (b', env') <- stp (a, env)
+        return (Neq a' b, env')
+                                                                                           --Funciones de listas
+    
     --Head (lista)
     stp (Head (a:xs),env) = do (a',env') <- stp (a,env)
         return (Head (a':xs),env') 
@@ -116,9 +139,12 @@ stp :: (Expr, Env) -> Maybe (Expr, Env)
 
                                                                             -- Condicionales
     -- If (cond, cero y varidicos es azucar)
-    stp (If ( a b c), env) = Just (If b)
-    stp ()   
+    stp (If (Boolean True  b c), env) =  Just (b, env)
+        |otherwise = Just (c, env)
+    stp (If(a,b,c), env) = do (a',env') <- (a,env)
+        return (If(a',b,c),env)
     
+   
 
 
 
