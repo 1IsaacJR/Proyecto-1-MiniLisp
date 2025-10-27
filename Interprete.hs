@@ -10,11 +10,11 @@ data DifClosure = P Closure -- cabeza de la funcion
 -}
 
 stp :: (ASA, Env) -> Maybe (ASA, Env)
-stp (Num m ,env) = (Num m ,env)
-stp (Bool a,env) = (Bool a ,env)
-stp (Var n ,env) = (lookUp n env,env)
+stp (Num m ,env) = Just (Num m ,env)
+stp (Bool a,env) = Just (Bool a ,env)
+stp (Var n ,env) = Just (lookUp n env,env)
 -- Agregar funciones como valores dentro del lenguaje
-stp (Lambda p c, env) = (Closure p c env, env)
+stp (Lambda p c, env) = Just (Closure p c env, env)
 --stp(List x:xs, env) = (list x:xs, env)
                                                                                             --Operadores aritmeticos
 --Reglas de Add
@@ -35,7 +35,7 @@ stp (Sub a b, env) = do
     (a', env') <- stp (a, env)
     return (Sub a' b, env')
 --Reglas Mul
-stp (Mul (Num a) (Num b),env) = Just (Mul (a * b),env)
+stp (Mul (Num a) (Num b),env) = Just (Num (a * b),env)
 stp (Mul a (Num b),env) = do 
     (a', env') <- stp (a, env)
     return (Mul a' (Num b), env')
@@ -43,7 +43,7 @@ stp (Mul a b, env) = do
     (a', env') <- stp (a, env)
     return (Mul a' b, env')
 --Reglas Div
-stp (Div (Num a) (Num b),env) = Just (Div (a / b),env)
+stp (Div (Num a) (Num b),env) = Just (Num (a / b),env)
 stp (Div a (Num b),env) = do 
     (a', env') <- stp (a, env)
     return (Div a' (Num b), env')
@@ -61,7 +61,7 @@ stp (Add1 (a),env) = do
 stp (Sub1 (Num a),env) = Just (Num (a-1),env)
 stp (Sub1 a,env) = do 
     (a',env') <- stp (a,env)
-    return (Sub a',env')
+    return (Sub1 a',env')
 --Reglas de potencia
 stp (Expt (Num a) (Num b), env)
     | b < 0     = Nothing  -- Si es negativo no lo cuenta
@@ -124,20 +124,24 @@ stp (Neq a b, env) = do
     return (Neq a' b, env')
                                                                                        --Funciones de listas
 
---Head (lista)
-stp (Head (a:xs),env) = do 
-    (a',env') <- stp (a,env)
-    return (Head (a':xs),env') 
+--Head (list)
+stp (Head (List (a:_)), env) =  Just (a, env)
+stp (Head e, env)
+  | not (isValue e) = do
+    (e', env') <- stp (e, env)
+    return (Head e', env')
+stp (Head (List []), env) = Just (Error "Empty list", env)
+
 --Tail (list)
+stp (Tail (List (c:xs)), env) = Just (List xs, env)
 stp (Tail (List []), env) = Nothing
-stp (Tail (c:xs), env) = Just (List xs, env)
 stp (Tail a, env) = do 
     (a',env') <- stp (a,env)
     return (Tail (a'),env') -- ??
                                                                     --Pares Ordenados y funciones de pares ordenados
 --Pares ordenados / agregar lo de si ya es valor en el lenguje
 stp ((Pair a b), env) -- Ver que ya no se reduce tanto
-    | isValue a && isValue b = Just (Pair (isValue a && isValue b),env)
+    | isValue a && isValue b = Just (Pair (a,b),env)
 stp (Pair a b, env)
     | isValue a == True = do
     (b', env') <- stp (b, env)
@@ -148,13 +152,13 @@ stp ((Pair a b), env) = do
 
 --Primer elemento
 stp (Fst a b, env)
-    | isValue a == True = Just (Fst isValue a,env)
+    | isValue a == True = Just (a,env)
 stp (Fst a b,env) = do 
     (a', env') <- stp (a,env)
     return (Fst (a'),env')
 --Segundo elemento
 stp (Snd a b , env)
-    | isValue b == True = Just (Fst isValue b,env)
+    | isValue b == True = Just (b,env)
 stp (Snd a b,env) = do 
     (b', env') <- stp (b,env)
     return (Snd (b'),env')
@@ -163,9 +167,18 @@ stp (Snd a b,env) = do
 stp (If (Bool True) b c, env) =  Just (b, env)
 stp (If (Bool False) b c, env) = Just (c, env)
 stp (If a b c, env) = do 
-    (a',env') <- (a,env)
+    (a',env') <- stp (a,env)
     return (If a' b c ,env')
-    
+
+stp (App (Closure p c e) a,env)
+    | isValue a == True = (c, (p, a) : e)
+    | otherwise = do
+        (a',env') <- stp (a,env)
+        return (App (ClosureV p c e) a', env')
+stp (App f a,env) = do
+    (f',env') <- stp (f,env)
+    return (App f' a, env')
+
 interprete:: ASA -> Env -> ASA
 interprete e env
     | isValue e == True = e
