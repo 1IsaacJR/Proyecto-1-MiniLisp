@@ -1,4 +1,4 @@
---No se ha compilado, puede que no funcione
+--Se ha compilado, no funciona
 module Interprete where
 import ASA
 
@@ -155,13 +155,14 @@ stp (Fst a b, env)
     | isValue a == True = Just (a,env)
 stp (Fst a b,env) = do 
     (a', env') <- stp (a,env)
-    return (Fst (a'),env')
+    return (Fst a' b,env')
+
 --Segundo elemento
 stp (Snd a b , env)
     | isValue b == True = Just (b,env)
 stp (Snd a b,env) = do 
     (b', env') <- stp (b,env)
-    return (Snd (b'),env')
+    return (Snd a b',env')
                                                                         -- Condicionales
 -- If (cond, cero y varidicos es azucar)
 stp (If (Bool True) b c, env) =  Just (b, env)
@@ -170,14 +171,27 @@ stp (If a b c, env) = do
     (a',env') <- stp (a,env)
     return (If a' b c ,env')
 
+-- Aplicaciones de funcion
 stp (App (Closure p c e) a,env)
-    | isValue a == True = (c, (p, a) : e)
-    | otherwise = do
-        (a',env') <- stp (a,env)
-        return (App (ClosureV p c e) a', env')
+    | all isValue a = Just (c, zip p a ++ e)
+stp (App f a, env)
+    | not (all isValue a) = do
+        (a', env') <- stpAux (a env)
+        return (App f a', env')
 stp (App f a,env) = do
     (f',env') <- stp (f,env)
     return (App f' a, env')
+
+
+stpAux :: [ASA] -> [(String, ASA)] -> Maybe ([ASA], [(String, ASA)])
+stpAux [] env = Just ([], env)
+stpAux (a:as) env
+  | isValue a = do
+      (as', env') <- stpAux as env
+      return (a:as', env')
+  | otherwise = do
+      (a', env') <- stp (a, env)
+      return (a':as, env')
 
 interprete:: ASA -> Env -> ASA
 interprete e env
