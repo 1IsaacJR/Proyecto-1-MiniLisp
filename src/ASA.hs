@@ -49,16 +49,4 @@ data ASA
     deriving (Show, Eq)
 
 
--- Valores resultantes de la evaluación
-data Value
-    = NumV Int
-    | BoolV Bool
-    | PairV Value Value
-    | ListV [Value]
-    | Closure [String] ASA Env  -- lambdas con varios parámetros
-    | ErrorV String
-    deriving (Show, Eq)
-
--- Entorno (bindings)
-type Env = [(String, Value)]
 

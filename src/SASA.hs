@@ -1,4 +1,6 @@
-module SASA where
+module SASA(
+    SASA(..)  -- exporta el tipo y todos sus constructores
+) where
 
 -- Sintaxis superficial (SASA)
 data SASA
