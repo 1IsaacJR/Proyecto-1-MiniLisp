@@ -43,7 +43,7 @@ stp (Mul a b, env) = do
     (a', env') <- stp (a, env)
     return (Mul a' b, env')
 --Reglas Div
-stp (Div (Num a) (Num b),env) = Just (Num (a / b),env)
+stp (Div (Num a) (Num b),env) = Just (Num (a `div` b),env)
 stp (Div a (Num b),env) = do 
     (a', env') <- stp (a, env)
     return (Div a' (Num b), env')
@@ -141,7 +141,7 @@ stp (Tail a, env) = do
                                                                     --Pares Ordenados y funciones de pares ordenados
 --Pares ordenados / agregar lo de si ya es valor en el lenguje
 stp ((Pair a b), env) -- Ver que ya no se reduce tanto
-    | isValue a && isValue b = Just (Pair (a,b),env)
+    | isValue a && isValue b = Just (Pair a b,env)
 stp (Pair a b, env)
     | isValue a == True = do
     (b', env') <- stp (b, env)
@@ -176,7 +176,7 @@ stp (App (Closure p c e) a,env)
     | all isValue a = Just (c, zip p a ++ e)
 stp (App f a, env)
     | not (all isValue a) = do
-        (a', env') <- stpAux (a env)
+        (a', env') <- stpAux a env
         return (App f a', env')
 stp (App f a,env) = do
     (f',env') <- stp (f,env)
@@ -193,12 +193,13 @@ stpAux (a:as) env
       (a', env') <- stp (a, env)
       return (a':as, env')
 
-interprete:: ASA -> Env -> ASA
+interprete :: ASA -> Env -> ASA
 interprete e env
-    | isValue e == True = e
-    | otherwise =  
-        let (e',env') = stp (e, env)
-        in interprete e' env'
+    | isValue e = e
+    | otherwise =
+        case stp (e, env) of
+            Just (e', env') -> interprete e' env'
+            Nothing          -> e
 
 lookUp :: String -> Env -> ASA
 lookUp i [] = error ("Variable " ++ i ++ " not found")
