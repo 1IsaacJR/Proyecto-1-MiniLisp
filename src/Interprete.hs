@@ -9,43 +9,96 @@ type Env = [(String, ASAValues)]
 stp :: (ASAValues, Env) -> Maybe (ASAValues, Env)
 
 -- Valores básicos
-stp (NumV m ,env) = Just (NumV m ,env)
-stp (BoolV a,env) = Just (BoolV a ,env)
-stp (VarV n ,env) = Just (lookupEnv n env,env)
-stp (LambdaV p c, env) = Just (ClosureV p c env, env)
+--stp (NumV m ,env) = Just (NumV m ,env)
+--stp (BoolV a,env) = Just (BoolV a ,env)
+--stp (VarV n ,env) = Just (lookupEnv n env,env)
+--stp (LambdaV p c, env) = Just (ClosureV p c env, env)
+
+stp (NumV m, env) = Nothing
+stp (BoolV a, env) = Nothing
+stp (ClosureV _ _ _, env) = Nothing
 
 -- Operadores aritméticos
-stp (AddV (NumV a) (NumV b),env) = Just (NumV (a + b),env)
-stp (AddV a (NumV b), env) = do 
+-- Suma
+stp (AddV (NumV a) (NumV b), env) = Just (NumV (a + b), env)
+stp (AddV a (NumV b), env) = do
     (a', env') <- stp (a, env)
     return (AddV a' (NumV b), env')
-stp (AddV a b, env) = do 
+stp (AddV (NumV a) b, env) = do
+    (b', env') <- stp (b, env)
+    return (AddV (NumV a) b', env')
+stp (AddV a b, env) = do
     (a', env') <- stp (a, env)
     return (AddV a' b, env')
 
-stp (SubV (NumV a) (NumV b),env) = Just (NumV (a - b),env)
-stp (SubV a (NumV b), env) = do 
+-- Resta
+stp (SubV (NumV a) (NumV b), env) = Just (NumV (a - b), env)
+stp (SubV a (NumV b), env) = do
     (a', env') <- stp (a, env)
     return (SubV a' (NumV b), env')
-stp (SubV a b, env) = do 
+stp (SubV (NumV a) b, env) = do
+    (b', env') <- stp (b, env)
+    return (SubV (NumV a) b', env')
+stp (SubV a b, env) = do
     (a', env') <- stp (a, env)
     return (SubV a' b, env')
 
-stp (MulV (NumV a) (NumV b),env) = Just (NumV (a * b),env)
-stp (MulV a (NumV b), env) = do 
+-- Multiplicación
+stp (MulV (NumV a) (NumV b), env) = Just (NumV (a * b), env)
+stp (MulV a (NumV b), env) = do
     (a', env') <- stp (a, env)
     return (MulV a' (NumV b), env')
-stp (MulV a b, env) = do 
+stp (MulV (NumV a) b, env) = do
+    (b', env') <- stp (b, env)
+    return (MulV (NumV a) b', env')
+stp (MulV a b, env) = do
     (a', env') <- stp (a, env)
     return (MulV a' b, env')
 
-stp (DivV (NumV a) (NumV b),env) = Just (NumV (a `div` b),env)
-stp (DivV a (NumV b), env) = do 
+-- División
+stp (DivV (NumV a) (NumV b), env) = Just (NumV (a `div` b), env)
+stp (DivV a (NumV b), env) = do
     (a', env') <- stp (a, env)
     return (DivV a' (NumV b), env')
-stp (DivV a b, env) = do 
+stp (DivV (NumV a) b, env) = do
+    (b', env') <- stp (b, env)
+    return (DivV (NumV a) b', env')
+stp (DivV a b, env) = do
     (a', env') <- stp (a, env)
     return (DivV a' b, env')
+
+-- Incremento y decremento
+stp (Add1V (NumV a), env) = Just (NumV (a + 1), env)
+stp (Add1V a, env) = do
+    (a', env') <- stp (a, env)
+    return (Add1V a', env')
+
+stp (Sub1V (NumV a), env) = Just (NumV (a - 1), env)
+stp (Sub1V a, env) = do
+    (a', env') <- stp (a, env)
+    return (Sub1V a', env')
+
+-- Raíz cuadrada
+stp (SqrtV (NumV a), env) = Just (NumV (floor (sqrt (fromIntegral a))), env)
+stp (SqrtV a, env) = do
+    (a', env') <- stp (a, env)
+    return (SqrtV a', env')
+
+-- Potencia
+stp (ExptV (NumV a) (NumV b), env) = Just (NumV (a ^ b), env)
+stp (ExptV a (NumV b), env) = do
+    (a', env') <- stp (a, env)
+    return (ExptV a' (NumV b), env')
+stp (ExptV (NumV a) b, env) = do
+    (b', env') <- stp (b, env)
+    return (ExptV (NumV a) b', env')
+stp (ExptV a b, env) = do
+    (a', env') <- stp (a, env)
+    return (ExptV a' b, env')
+
+
+
+
 
 -- Operadores lógicos
 stp (EqV (NumV a) (NumV b), env) = Just (BoolV (a == b), env)
@@ -69,6 +122,13 @@ stp (If0V (NumV n) t e, env) = Just (e, env)
 stp (If0V c t e, env) = do
     (c', env') <- stp (c, env)
     return (If0V c' t e, env')
+
+
+
+
+
+
+    
 
 -- Pares
 stp (PairV a b, env)
