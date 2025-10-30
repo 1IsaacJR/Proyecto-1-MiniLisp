@@ -1,116 +1,134 @@
-module Desugar where
+module Desugar (desugar, desugarV) where
 
-import SASA
 import ASA
 import ASAValues
 
--- Función principal de desugaring
-desugar :: SASA -> ASA
-desugar (NumS n) = Num n
-desugar (BoolS b) = Bool b
-desugar (VarS v) = Var v
+-- ------------------------------------------------------------------
+-- desugar :: ASA (superficie) -> ASA (core)
+--  - Convierte let variádico paralelo a App(Lambda ...)
+--  - Convierte let* en anidamiento de lets (vía App/Lambda)
+--  - Convierte cond en cascada de if (requiere else)
+--  - Recorre recursivamente el árbol
+--  - El resto de formas se mantienen (solo se desazucaran subexpresiones)
+-- ------------------------------------------------------------------
 
--- Operadores binarios/variádicos
-desugar (AddS (x:xs)) = reduceLeft Add (desugar x : map desugar xs)
-desugar (SubS (x:xs)) = reduceLeft Sub (desugar x : map desugar xs)
-desugar (MulS (x:xs)) = reduceLeft Mul (desugar x : map desugar xs)
-desugar (DivS (x:xs)) = reduceLeft Div (desugar x : map desugar xs)
+desugar :: ASA -> ASA
+-- Básicos
+desugar (Num n)   = Num n
+desugar (Bool b)  = Bool b
+desugar (Var x)   = Var x
 
--- Comparaciones variádicas (pares consecutivos)
-desugar (EqS (x:xs))  = reduceLeft Eq (desugar x : map desugar xs)
-desugar (LtS (x:xs))  = reduceLeft Lt (desugar x : map desugar xs)
-desugar (GtS (x:xs))  = reduceLeft Gt (desugar x : map desugar xs)
-desugar (LeqS (x:xs)) = reduceLeft Leq (desugar x : map desugar xs)
-desugar (GeqS (x:xs)) = reduceLeft Geq (desugar x : map desugar xs)
-desugar (NeqS (x:xs)) = reduceLeft Neq (desugar x : map desugar xs)
-
--- Unarios
-desugar (Add1S e) = Add1 (desugar e)
-desugar (Sub1S e) = Sub1 (desugar e)
-desugar (SqrtS e) = Sqrt (desugar e)
-desugar (ExptS a b) = Expt (desugar a) (desugar b)
+-- Aritmética/Comparadores/Unarios (binarios ya en ASA)
+desugar (Add a b)  = Add  (desugar a) (desugar b)
+desugar (Sub a b)  = Sub  (desugar a) (desugar b)
+desugar (Mul a b)  = Mul  (desugar a) (desugar b)
+desugar (Div a b)  = Div  (desugar a) (desugar b)
+desugar (Eq a b)   = Eq   (desugar a) (desugar b)
+desugar (Lt a b)   = Lt   (desugar a) (desugar b)
+desugar (Gt a b)   = Gt   (desugar a) (desugar b)
+desugar (Leq a b)  = Leq  (desugar a) (desugar b)
+desugar (Geq a b)  = Geq  (desugar a) (desugar b)
+desugar (Neq a b)  = Neq  (desugar a) (desugar b)
+desugar (Add1 e)   = Add1 (desugar e)
+desugar (Sub1 e)   = Sub1 (desugar e)
+desugar (Sqrt e)   = Sqrt (desugar e)
+desugar (Expt a b) = Expt (desugar a) (desugar b)
 
 -- Pares y listas
-desugar (PairS a b) = Pair (desugar a) (desugar b)
-desugar (FstS e) = Fst (desugar e)
-desugar (SndS e) = Snd (desugar e)
-desugar (ListS es) = List (map desugar es)
-desugar (HeadS e) = Head (desugar e)
-desugar (TailS e) = Tail (desugar e)
-desugar NilS = Nil
+desugar (Pair a b)  = Pair (desugar a) (desugar b)
+desugar (Fst e)     = Fst  (desugar e)
+desugar (Snd e)     = Snd  (desugar e)
+desugar (List es)   = List (map desugar es)
+desugar (Head e)    = Head (desugar e)
+desugar (Tail e)    = Tail (desugar e)
+desugar Nil         = Nil
 
--- Let normal
-desugar (LetS [(x,v)] c) = App (Lambda [x] (desugar c)) [desugar v]
+-- Let paralelo variádico: let ((x e1) (y e2) ...) body
+desugar (Let binds body) =
+  App (Lambda (map fst binds) (desugar body))
+      (map (desugar . snd) binds)
 
--- LetRec
-desugar (LetRecS [(f,v)] c) = LetRec [(f, desugar v)] (desugar c)
+-- Let* secuencial: let* ((x e1) (y e2) ...) body
+desugar (LetStar [] body) = desugar body
+desugar (LetStar ((x,e):xs) body) =
+  App (Lambda [x] (desugar (LetStar xs body)))
+      [desugar e]
 
--- LetStar
-desugar (LetStarS [] c) = desugar c
-desugar (LetStarS ((x,v):xs) c) =
-    App (Lambda [x] (desugar (LetStarS xs c))) [desugar v]
+-- Let recursivo (mantén su forma; si luego quieres, puedes atar el nudo en el intérprete)
+desugar (LetRec defs body) =
+  LetRec [ (f, desugar e) | (f,e) <- defs ] (desugar body)
 
 -- Condicionales
-desugar (IfS c t e) = If (desugar c) (desugar t) (desugar e)
-desugar (If0S c t e) = If0 (desugar c) (desugar t) (desugar e)
-desugar (CondS [] Nothing) = error "Cond vacío sin else"
-desugar (CondS ((c,e):xs) mElse) =
-    let elseBranch = case xs of
-                        [] -> maybe (error "Cond sin else") desugar mElse
-                        _  -> desugar (CondS xs mElse)
-    in If (desugar c) (desugar e) elseBranch
+desugar (If c t e)   = If  (desugar c) (desugar t) (desugar e)
+desugar (If0 c t e)  = If0 (desugar c) (desugar t) (desugar e)
 
--- Funciones y aplicaciones
-desugar (LambdaS xs body) = Lambda xs (desugar body)
-desugar (AppS f args) = App (desugar f) (map desugar args)
-
--- Función auxiliar para reducir operadores variádicos izquierda a derecha
-reduceLeft :: (ASA -> ASA -> ASA) -> [ASA] -> ASA
-reduceLeft f [x] = x
-reduceLeft f (x:y:rest) = reduceLeft f (f x y : rest)
-reduceLeft _ [] = error "reduceLeft: lista vacía"
-
--- Convierte ASA a ASAValues
-desugarV :: ASA -> ASAValues
-desugarV (Num n)       = NumV n
-desugarV (Bool b)      = BoolV b
-desugarV (Var x)       = VarV x
-
--- Aritmética y lógica
-desugarV (Add e1 e2)   = AddV (desugarV e1) (desugarV e2)
-desugarV (Sub e1 e2)   = SubV (desugarV e1) (desugarV e2)
-desugarV (Mul e1 e2)   = MulV (desugarV e1) (desugarV e2)
-desugarV (Div e1 e2)   = DivV (desugarV e1) (desugarV e2)
-desugarV (Eq e1 e2)    = EqV  (desugarV e1) (desugarV e2)
-desugarV (Lt e1 e2)    = LtV  (desugarV e1) (desugarV e2)
-desugarV (Gt e1 e2)    = GtV  (desugarV e1) (desugarV e2)
-desugarV (Leq e1 e2)   = LeqV (desugarV e1) (desugarV e2)
-desugarV (Geq e1 e2)   = GeqV (desugarV e1) (desugarV e2)
-desugarV (Neq e1 e2)   = NeqV (desugarV e1) (desugarV e2)
-
--- Unarios
-desugarV (Add1 e)      = Add1V (desugarV e)
-desugarV (Sub1 e)      = Sub1V (desugarV e)
-desugarV (Sqrt e)      = SqrtV (desugarV e)
-desugarV (Expt e1 e2)  = ExptV (desugarV e1) (desugarV e2)
-
--- Pares y listas
-desugarV (Pair e1 e2)  = PairV (desugarV e1) (desugarV e2)
-desugarV (Fst e)       = FstV (desugarV e)
-desugarV (Snd e)       = SndV (desugarV e)
-desugarV (List es)     = ListV (map desugarV es)
-desugarV (Head e)      = HeadV (desugarV e)
-desugarV (Tail e)      = TailV (desugarV e)
-desugarV Nil           = NilV
+-- cond [(c1,e1) ... (cn,en)] else eElse  ==> if c1 e1 (if c2 e2 (... eElse))
+desugar (Cond [] Nothing) = error "cond: falta rama else"
+desugar (Cond [] (Just eElse)) = desugar eElse
+desugar (Cond ((c,e):rest) mElse) =
+  let elseBranch = case rest of
+        [] -> maybe (error "cond: falta rama else") desugar mElse
+        _  -> desugar (Cond rest mElse)
+  in If (desugar c) (desugar e) elseBranch
 
 -- Funciones y aplicación
-desugarV (Lambda args body) = LambdaV args (desugarV body)
-desugarV (App f args)       = AppV (desugarV f) (map desugarV args)
+desugar (Lambda xs body) = Lambda xs (desugar body)
+desugar (App f args)     = App (desugar f) (map desugar args)
+
+-- ------------------------------------------------------------------
+-- desugarV :: ASA (core) -> ASAValues (forma evaluable por el intérprete)
+--  - Mapea If -> IfV (booleans) e If0 -> If0V (numérico)
+--  - NO genera ExprV raros (cond ya fue desazucarado arriba)
+-- ------------------------------------------------------------------
+
+desugarV :: ASA -> ASAValues
+-- Básicos
+desugarV (Num n)  = NumV n
+desugarV (Bool b) = BoolV b
+desugarV (Var x)  = VarV x
+
+-- Aritmética/Comparadores
+desugarV (Add a b) = AddV (desugarV a) (desugarV b)
+desugarV (Sub a b) = SubV (desugarV a) (desugarV b)
+desugarV (Mul a b) = MulV (desugarV a) (desugarV b)
+desugarV (Div a b) = DivV (desugarV a) (desugarV b)
+desugarV (Eq a b)  = EqV  (desugarV a) (desugarV b)
+desugarV (Lt a b)  = LtV  (desugarV a) (desugarV b)
+desugarV (Gt a b)  = GtV  (desugarV a) (desugarV b)
+desugarV (Leq a b) = LeqV (desugarV a) (desugarV b)
+desugarV (Geq a b) = GeqV (desugarV a) (desugarV b)
+desugarV (Neq a b) = NeqV (desugarV a) (desugarV b)
+
+-- Unarios
+desugarV (Add1 e)   = Add1V (desugarV e)
+desugarV (Sub1 e)   = Sub1V (desugarV e)
+desugarV (Sqrt e)   = SqrtV (desugarV e)
+desugarV (Expt a b) = ExptV (desugarV a) (desugarV b)
+
+-- Pares y listas
+desugarV (Pair a b) = PairV (desugarV a) (desugarV b)
+desugarV (Fst e)    = FstV  (desugarV e)
+desugarV (Snd e)    = SndV  (desugarV e)
+desugarV (List es)  = ListV (map desugarV es)
+desugarV (Head e)   = HeadV (desugarV e)
+desugarV (Tail e)   = TailV (desugarV e)
+desugarV Nil        = NilV
 
 -- Condicionales
-desugarV (If c t e)         = If0V (desugarV c) (desugarV t) (desugarV e) -- podrías crear IfV si quieres
-desugarV (If0 c t e)        = If0V (desugarV c) (desugarV t) (desugarV e)
-desugarV (Cond branches mElse) =
-    let desBranches = map (\(c,b) -> (desugarV c, desugarV b)) branches
-        elseV = fmap desugarV mElse
-    in ExprV (ListV (map snd desBranches ++ maybe [] (:[]) elseV)) [] -- ejemplo, se puede ajustar
+desugarV (If c t e)   = IfV  (desugarV c) (desugarV t) (desugarV e)
+desugarV (If0 c t e)  = If0V (desugarV c) (desugarV t) (desugarV e)
+desugarV (Cond _ _)   = error "desugarV: 'Cond' debe haberse desazucarado en 'desugar'"
+
+-- Funciones y aplicación
+desugarV (Lambda xs body) = LambdaV xs (desugarV body)
+desugarV (App f args)     = AppV (desugarV f) (map desugarV args)
+
+-- Let/Let*/LetRec (después de 'desugar' ya deberían venir como App/Lambda salvo LetRec)
+desugarV (Let _ _)      = error "desugarV: Let debe desazucararse en 'desugar'"
+desugarV (LetStar _ _)  = error "desugarV: Let* debe desazucararse en 'desugar'"
+desugarV (LetRec defs body) =
+  -- Representación directa en valores; el atado del nudo lo maneja tu intérprete o un paso adicional.
+  -- Si prefieres, puedes mantener LetRec en ASA y no bajarlo a ASAValues hasta aplicarlo.
+  -- Aquí lo dejamos como clausuras diferidas:
+  AppV (LambdaV (map fst defs) (desugarV body))
+       (map (desugarV . snd) defs)

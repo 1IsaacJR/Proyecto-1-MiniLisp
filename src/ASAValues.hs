@@ -17,6 +17,7 @@ data ASAValues
     | LeqV ASAValues ASAValues
     | GeqV ASAValues ASAValues
     | NeqV ASAValues ASAValues
+    | IfV ASAValues ASAValues ASAValues
 
     -- Operadores unarios
     | Add1V ASAValues
