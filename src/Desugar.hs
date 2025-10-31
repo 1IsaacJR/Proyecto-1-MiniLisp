@@ -16,19 +16,56 @@ desugar (SubS (x:xs)) = reduceLeft Sub (desugar x : map desugar xs)
 desugar (MulS (x:xs)) = reduceLeft Mul (desugar x : map desugar xs)
 desugar (DivS (x:xs)) = reduceLeft Div (desugar x : map desugar xs)
 
--- Comparaciones variádicas (pares consecutivos)
-desugar (EqS (x:xs))  = reduceLeft Eq (desugar x : map desugar xs)
-desugar (LtS (x:xs))  = reduceLeft Lt (desugar x : map desugar xs)
-desugar (GtS (x:xs))  = reduceLeft Gt (desugar x : map desugar xs)
-desugar (LeqS (x:xs)) = reduceLeft Leq (desugar x : map desugar xs)
-desugar (GeqS (x:xs)) = reduceLeft Geq (desugar x : map desugar xs)
-desugar (NeqS (x:xs)) = reduceLeft Neq (desugar x : map desugar xs)
 
 -- Unarios
 desugar (Add1S e) = Add1 (desugar e)
 desugar (Sub1S e) = Sub1 (desugar e)
 desugar (SqrtS e) = Sqrt (desugar e)
 desugar (ExptS a b) = Expt (desugar a) (desugar b)
+
+
+-- Comparaciones variádicas interpretadas como cadena (a < b < c ...)
+desugar (EqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Eq (desugar a) (desugar b)))
+          (Eq (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (EqS [x]) = desugar x
+desugar (EqS [])  = error "comparación vacía (=)"
+
+desugar (LtS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Lt (desugar a) (desugar b)))
+          (Lt (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (LtS [x]) = desugar x
+desugar (LtS [])  = error "comparación vacía (<)"
+
+desugar (GtS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Gt (desugar a) (desugar b)))
+          (Gt (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (GtS [x]) = desugar x
+desugar (GtS [])  = error "comparación vacía (>)"
+
+desugar (LeqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Leq (desugar a) (desugar b)))
+          (Leq (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (LeqS [x]) = desugar x
+desugar (LeqS [])  = error "comparación vacía (<=)"
+
+desugar (GeqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Geq (desugar a) (desugar b)))
+          (Geq (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (GeqS [x]) = desugar x
+desugar (GeqS [])  = error "comparación vacía (>=)"
+
+desugar (NeqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Neq (desugar a) (desugar b)))
+          (Neq (desugar x) (desugar y))
+          (zip (y:xs) xs)
+desugar (NeqS [x]) = desugar x
+desugar (NeqS [])  = error "comparación vacía (!=)"
 
 -- Pares y listas
 desugar (PairS a b) = Pair (desugar a) (desugar b)
@@ -43,7 +80,12 @@ desugar NilS = Nil
 desugar (LetS [(x,v)] c) = App (Lambda [x] (desugar c)) [desugar v]
 
 -- LetRec
-desugar (LetRecS [(f,v)] c) = LetRec [(f, desugar v)] (desugar c)
+desugar (LetRecS name body expr) =
+    -- letrec x = e1 in e2  ≡  let x = Z (\x -> e1) in e2
+    LetS name (App zCombinator (Lambda name (desugar body))) (desugar expr)
+
+
+
 
 -- LetStar
 desugar (LetStarS [] c) = desugar c
@@ -87,6 +129,8 @@ desugarV (Gt e1 e2)    = GtV  (desugarV e1) (desugarV e2)
 desugarV (Leq e1 e2)   = LeqV (desugarV e1) (desugarV e2)
 desugarV (Geq e1 e2)   = GeqV (desugarV e1) (desugarV e2)
 desugarV (Neq e1 e2)   = NeqV (desugarV e1) (desugarV e2)
+desugarV (And a b)      =AndV (desugarV a) (desugarV b) 
+desugarV (Or a b)     = OrV  (desugarV a) (desugarV b )
 
 -- Unarios
 desugarV (Add1 e)      = Add1V (desugarV e)
@@ -114,3 +158,10 @@ desugarV (Cond branches mElse) =
     let desBranches = map (\(c,b) -> (desugarV c, desugarV b)) branches
         elseV = fmap desugarV mElse
     in ExprV (ListV (map snd desBranches ++ maybe [] (:[]) elseV)) [] -- ejemplo, se puede ajustar
+
+    zCombinator :: ASA
+zCombinator =
+    Lambda "f" $
+      App
+        (Lambda "x" (App (Var "f") (App (Var "x") (Var "x"))))
+        (Lambda "x" (App (Var "f") (App (Var "x") (Var "x"))))

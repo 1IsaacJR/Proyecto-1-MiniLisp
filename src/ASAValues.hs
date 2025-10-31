@@ -24,6 +24,11 @@ data ASAValues
     | SqrtV ASAValues
     | ExptV ASAValues ASAValues
 
+    | AndV ASAValues ASAValues
+    | OrV ASAValues ASAValues
+    | NotV ASAValues
+
+
     | If0V ASAValues ASAValues ASAValues
 
     -- Pares y listas

@@ -87,3 +87,7 @@ main = do
     let comboExample = AddS [MulS [NumS 2, NumS 3], ExptS (NumS 2) (NumS 3), Sub1S (NumS 5)] 
     -- (2*3) + (2^3) + (5-1) = 6 + 8 + 4 = 18
     runExample comboExample
+
+    let ex1 = LtS [NumS 2, NumS 5, NumS 5, NumS 7, NumS 3]
+
+    runExample ex1

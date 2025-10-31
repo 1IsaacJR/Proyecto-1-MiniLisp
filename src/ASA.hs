@@ -24,6 +24,10 @@ data ASA
     | Sqrt ASA
     | Expt ASA ASA
 
+    | And ASA ASA
+    | Or ASA ASA
+    | Not ASA
+
     -- Pares y listas
     | Pair ASA ASA
     | Fst ASA

@@ -17,6 +17,18 @@ stp :: (ASAValues, Env) -> Maybe (ASAValues, Env)
 stp (NumV m, env) = Nothing
 stp (BoolV a, env) = Nothing
 stp (ClosureV _ _ _, env) = Nothing
+-- Lambdas de superficie: cerrar con el entorno actual
+stp (LambdaV ps body, env) = Just (ClosureV ps body env, env)
+
+-- Valores atómicos/closures ya no reducen
+stp (NumV _,  _)         = Nothing
+stp (BoolV _, _)         = Nothing
+stp (ClosureV _ _ _, _)  = Nothing
+stp (NilV,   _)          = Nothing
+stp (ListV xs, env)
+  | all isValueV xs      = Nothing
+
+  
 
 -- Operadores aritméticos
 -- Suma
@@ -97,24 +109,89 @@ stp (ExptV a b, env) = do
     return (ExptV a' b, env')
 
 
-
-
-
--- Operadores lógicos
-stp (EqV (NumV a) (NumV b), env) = Just (BoolV (a == b), env)
-stp (EqV a b, env) = do
+-- igualdad
+stp (EqV (NumV a) (NumV b), env) = Just (BoolV ( a == b), env) 
+stp (EqV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (EqV (NumV a) b', env')
+stp (EqV a b, env) = do 
     (a', env') <- stp (a, env)
     return (EqV a' b, env')
 
+-- Menor que
 stp (LtV (NumV a) (NumV b), env) = Just (BoolV (a < b), env)
-stp (LtV a b, env) = do
+stp (LtV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (LtV (NumV a) b', env')
+stp (LtV a b, env) = do 
     (a', env') <- stp (a, env)
     return (LtV a' b, env')
 
-stp (GtV (NumV a) (NumV b), env) = Just (BoolV (a > b), env)
-stp (GtV a b, env) = do
+-- Mayor que
+stp (GtV (NumV a) (NumV b), env) = Just (BoolV (a > b), env) 
+stp (GtV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (GtV (NumV a) b', env')
+stp (GtV a b, env) = do 
     (a', env') <- stp (a, env)
     return (GtV a' b, env')
+
+--Menor igual que 
+stp (LeqV (NumV a) (NumV b), env) = Just (BoolV (a <= b), env) 
+stp (LeqV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (LeqV (NumV a) b', env')
+stp (LeqV a b, env) = do 
+    (a', env') <- stp (a, env)
+    return (LeqV a' b, env')
+
+--Mayor igual que
+stp (GeqV (NumV a) (NumV b), env) = Just (BoolV (a >= b), env) 
+stp (GeqV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (GeqV (NumV a) b', env')
+stp (GeqV a b, env) = do 
+    (a', env') <- stp (a, env)
+    return (GeqV a' b, env')
+
+-- DIferente de
+stp (NeqV (NumV a) (NumV b), env) = Just (BoolV (a /= b), env) 
+stp (NeqV (NumV a) b, env) = do 
+    (b', env') <- stp (b, env)
+    return (NeqV (NumV a) b', env')
+stp (NeqV a b, env) = do 
+    (a', env') <- stp (a, env)
+    return (NeqV a' b, env')
+
+ -- AND
+stp (AndV (BoolV True) b, env)  = Just (b, env)
+stp (AndV (BoolV False) _, env) = Just (BoolV False, env)
+stp (AndV a b, env)
+  | not (isValueV a) = do
+      (a', env') <- stp (a, env)
+      Just (AndV a' b, env')
+  | otherwise = do
+      (b', env') <- stp (b, env)
+      Just (AndV a b', env')
+
+-- OR
+stp (OrV (BoolV True) _, env)   = Just (BoolV True, env)
+stp (OrV (BoolV False) b, env)  = Just (b, env)
+stp (OrV a b, env)
+  | not (isValueV a) = do
+      (a', env') <- stp (a, env)
+      Just (OrV a' b, env')
+  | otherwise = do
+      (b', env') <- stp (b, env)
+      Just (OrV a b', env')
+
+-- NOT
+stp (NotV (BoolV True), env)  = Just (BoolV False, env)
+stp (NotV (BoolV False), env) = Just (BoolV True, env)
+stp (NotV e, env)
+  | not (isValueV e) = do
+      (e', env') <- stp (e, env)
+      Just (NotV e', env')
 
 -- Condicional
 stp (If0V (NumV 0) t e, env) = Just (t, env)
@@ -122,13 +199,6 @@ stp (If0V (NumV n) t e, env) = Just (e, env)
 stp (If0V c t e, env) = do
     (c', env') <- stp (c, env)
     return (If0V c' t e, env')
-
-
-
-
-
-
-    
 
 -- Pares
 stp (PairV a b, env)
@@ -149,6 +219,7 @@ stp (SndV (PairV a b), env) = Just (b, env)
 stp (SndV a, env) = do
     (a', env') <- stp (a, env)
     return (SndV a', env')
+
 
 -- Listas
 stp (HeadV (ListV (x:_)), env) = Just (x, env)
