@@ -10,6 +10,7 @@ desugar (NumS n) = Num n
 desugar (BoolS b) = Bool b
 desugar (VarS v) = Var v
 
+
 -- Operadores binarios/variádicos
 desugar (AddS (x:xs)) = reduceLeft Add (desugar x : map desugar xs)
 desugar (SubS (x:xs)) = reduceLeft Sub (desugar x : map desugar xs)
@@ -24,48 +25,53 @@ desugar (SqrtS e) = Sqrt (desugar e)
 desugar (ExptS a b) = Expt (desugar a) (desugar b)
 
 
--- Comparaciones variádicas interpretadas como cadena (a < b < c ...)
+-- Igualdad
+desugar (EqS [])  = Bool True
+desugar (EqS [_]) = Bool True
 desugar (EqS (x:y:xs)) =
     foldl (\acc (a, b) -> And acc (Eq (desugar a) (desugar b)))
           (Eq (desugar x) (desugar y))
           (zip (y:xs) xs)
-desugar (EqS [x]) = desugar x
-desugar (EqS [])  = error "comparación vacía (=)"
 
-desugar (LtS (x:y:xs)) =
-    foldl (\acc (a, b) -> And acc (Lt (desugar a) (desugar b)))
-          (Lt (desugar x) (desugar y))
-          (zip (y:xs) xs)
-desugar (LtS [x]) = desugar x
-desugar (LtS [])  = error "comparación vacía (<)"
-
-desugar (GtS (x:y:xs)) =
-    foldl (\acc (a, b) -> And acc (Gt (desugar a) (desugar b)))
-          (Gt (desugar x) (desugar y))
-          (zip (y:xs) xs)
-desugar (GtS [x]) = desugar x
-desugar (GtS [])  = error "comparación vacía (>)"
-
-desugar (LeqS (x:y:xs)) =
-    foldl (\acc (a, b) -> And acc (Leq (desugar a) (desugar b)))
-          (Leq (desugar x) (desugar y))
-          (zip (y:xs) xs)
-desugar (LeqS [x]) = desugar x
-desugar (LeqS [])  = error "comparación vacía (<=)"
-
-desugar (GeqS (x:y:xs)) =
-    foldl (\acc (a, b) -> And acc (Geq (desugar a) (desugar b)))
-          (Geq (desugar x) (desugar y))
-          (zip (y:xs) xs)
-desugar (GeqS [x]) = desugar x
-desugar (GeqS [])  = error "comparación vacía (>=)"
-
+-- Desigualdad
+desugar (NeqS [])  = Bool False
+desugar (NeqS [_]) = Bool False
 desugar (NeqS (x:y:xs)) =
     foldl (\acc (a, b) -> And acc (Neq (desugar a) (desugar b)))
           (Neq (desugar x) (desugar y))
           (zip (y:xs) xs)
-desugar (NeqS [x]) = desugar x
-desugar (NeqS [])  = error "comparación vacía (!=)"
+
+-- Menor que
+desugar (LtS [])  = Bool True
+desugar (LtS [_]) = Bool True
+desugar (LtS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Lt (desugar a) (desugar b)))
+          (Lt (desugar x) (desugar y))
+          (zip (y:xs) xs)
+
+-- Mayor que
+desugar (GtS [])  = Bool True
+desugar (GtS [_]) = Bool True
+desugar (GtS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Gt (desugar a) (desugar b)))
+          (Gt (desugar x) (desugar y))
+          (zip (y:xs) xs)
+
+-- Menor o igual
+desugar (LeqS [])  = Bool True
+desugar (LeqS [_]) = Bool True
+desugar (LeqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Leq (desugar a) (desugar b)))
+          (Leq (desugar x) (desugar y))
+          (zip (y:xs) xs)
+
+-- Mayor o igual
+desugar (GeqS [])  = Bool True
+desugar (GeqS [_]) = Bool True
+desugar (GeqS (x:y:xs)) =
+    foldl (\acc (a, b) -> And acc (Geq (desugar a) (desugar b)))
+          (Geq (desugar x) (desugar y))
+          (zip (y:xs) xs)
 
 -- Pares y listas
 desugar (PairS a b) = Pair (desugar a) (desugar b)
@@ -77,30 +83,34 @@ desugar (TailS e) = Tail (desugar e)
 desugar NilS = Nil
 
 -- Let normal
-desugar (LetS [(x,v)] c) = App (Lambda [x] (desugar c)) [desugar v]
+desugar (LetS bindings c) =
+    let vars = map fst bindings
+        vals = map (desugar . snd) bindings
+    in App (Lambda vars (desugar c)) vals
 
--- LetRec
-desugar (LetRecS name body expr) =
-    -- letrec x = e1 in e2  ≡  let x = Z (\x -> e1) in e2
-    LetS name (App zCombinator (Lambda name (desugar body))) (desugar expr)
-
-
-
-
--- LetStar
+-- LetStar secuencial
 desugar (LetStarS [] c) = desugar c
 desugar (LetStarS ((x,v):xs) c) =
     App (Lambda [x] (desugar (LetStarS xs c))) [desugar v]
 
+desugar (LetRecS [(f, body)] expr) =
+  Let [(f, App selfApplication [Lambda [f] (desugar body)])] 
+      (desugar expr)
+
+
 -- Condicionales
+-- if es primitiva, se deja tal cual
 desugar (IfS c t e) = If (desugar c) (desugar t) (desugar e)
-desugar (If0S c t e) = If0 (desugar c) (desugar t) (desugar e)
-desugar (CondS [] Nothing) = error "Cond vacío sin else"
-desugar (CondS ((c,e):xs) mElse) =
-    let elseBranch = case xs of
-                        [] -> maybe (error "Cond sin else") desugar mElse
-                        _  -> desugar (CondS xs mElse)
-    in If (desugar c) (desugar e) elseBranch
+
+-- if0 se convierte en if
+desugar (If0S c t e) = 
+    If (Eq (desugar c) (Num 0)) (desugar t) (desugar e)
+
+desugar (CondS branches mElse) =
+  case branches of
+    [] -> maybe (error "Cond vacío sin else") desugar mElse
+    ((c,b):xs) -> If (desugar c) (desugar b) (desugar (CondS xs mElse))
+
 
 -- Funciones y aplicaciones
 desugar (LambdaS xs body) = Lambda xs (desugar body)
@@ -152,16 +162,13 @@ desugarV (Lambda args body) = LambdaV args (desugarV body)
 desugarV (App f args)       = AppV (desugarV f) (map desugarV args)
 
 -- Condicionales
-desugarV (If c t e)         = If0V (desugarV c) (desugarV t) (desugarV e) -- podrías crear IfV si quieres
-desugarV (If0 c t e)        = If0V (desugarV c) (desugarV t) (desugarV e)
-desugarV (Cond branches mElse) =
-    let desBranches = map (\(c,b) -> (desugarV c, desugarV b)) branches
-        elseV = fmap desugarV mElse
-    in ExprV (ListV (map snd desBranches ++ maybe [] (:[]) elseV)) [] -- ejemplo, se puede ajustar
+-- Condicionales en ASAValues
+desugarV (If c t e) = IfV (desugarV c) (desugarV t) (desugarV e)
 
-    zCombinator :: ASA
-zCombinator =
-    Lambda "f" $
-      App
-        (Lambda "x" (App (Var "f") (App (Var "x") (Var "x"))))
-        (Lambda "x" (App (Var "f") (App (Var "x") (Var "x"))))
+
+
+selfApplication :: ASA
+selfApplication =
+  Lambda ["f"] $
+    App (Lambda ["x"] (App (Var "x") [Var "x"]))
+        [Lambda ["x"] (App (Var "f") [Lambda ["y"] (App (App (Var "x") [Var "x"]) [Var "y"])])]

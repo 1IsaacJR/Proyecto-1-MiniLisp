@@ -1,4 +1,4 @@
-module SASA(
+module SASA( 
     SASA(..)  -- exporta el tipo y todos sus constructores
 ) where
 
@@ -35,15 +35,21 @@ data SASA
     | TailS SASA
     | NilS
 
+
+-- Condicionales
+    | IfS SASA SASA SASA
+    | If0S SASA SASA SASA
+    | CondS [(SASA, SASA)] (Maybe SASA)
+
+
+
+    
     -- Asignaciones (formas superficiales)
     | LetS [(String, SASA)] SASA
     | LetRecS [(String, SASA)] SASA
     | LetStarS [(String, SASA)] SASA
 
-    -- Condicionales
-    | IfS SASA SASA SASA
-    | If0S SASA SASA SASA
-    | CondS [(SASA, SASA)] (Maybe SASA)
+    
 
     -- Funciones / Aplicaciones
     | LambdaS [String] SASA

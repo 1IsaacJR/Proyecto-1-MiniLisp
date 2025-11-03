@@ -8,29 +8,19 @@ type Env = [(String, ASAValues)]
 -- Paso pequeño (small step)
 stp :: (ASAValues, Env) -> Maybe (ASAValues, Env)
 
--- Valores básicos
---stp (NumV m ,env) = Just (NumV m ,env)
---stp (BoolV a,env) = Just (BoolV a ,env)
---stp (VarV n ,env) = Just (lookupEnv n env,env)
---stp (LambdaV p c, env) = Just (ClosureV p c env, env)
+-- Valores atómicos que no reducen más
+stp (NumV _, _) = Nothing
+stp (BoolV _, _) = Nothing
+stp (ClosureV _ _ _, _) = Nothing
+stp (NilV, _) = Nothing
+stp (ListV xs, _) | all isValueV xs = Nothing
 
-stp (NumV m, env) = Nothing
-stp (BoolV a, env) = Nothing
-stp (ClosureV _ _ _, env) = Nothing
--- Lambdas de superficie: cerrar con el entorno actual
-stp (LambdaV ps body, env) = Just (ClosureV ps body env, env)
-
--- Valores atómicos/closures ya no reducen
-stp (NumV _,  _)         = Nothing
-stp (BoolV _, _)         = Nothing
-stp (ClosureV _ _ _, _)  = Nothing
-stp (NilV,   _)          = Nothing
-stp (ListV xs, env)
-  | all isValueV xs      = Nothing
-
-  
+-- Casos que reducen
+stp (VarV n, env) = Just (lookupEnv n env, env)
+stp (LambdaV p c, env) = Just (ClosureV p c env, env)
 
 -- Operadores aritméticos
+
 -- Suma
 stp (AddV (NumV a) (NumV b), env) = Just (NumV (a + b), env)
 stp (AddV a (NumV b), env) = do
@@ -79,12 +69,13 @@ stp (DivV a b, env) = do
     (a', env') <- stp (a, env)
     return (DivV a' b, env')
 
--- Incremento y decremento
+-- Incremento 
 stp (Add1V (NumV a), env) = Just (NumV (a + 1), env)
 stp (Add1V a, env) = do
     (a', env') <- stp (a, env)
     return (Add1V a', env')
 
+--Decremento
 stp (Sub1V (NumV a), env) = Just (NumV (a - 1), env)
 stp (Sub1V a, env) = do
     (a', env') <- stp (a, env)
@@ -174,6 +165,7 @@ stp (AndV a b, env)
       (b', env') <- stp (b, env)
       Just (AndV a b', env')
 
+
 -- OR
 stp (OrV (BoolV True) _, env)   = Just (BoolV True, env)
 stp (OrV (BoolV False) b, env)  = Just (b, env)
@@ -185,6 +177,7 @@ stp (OrV a b, env)
       (b', env') <- stp (b, env)
       Just (OrV a b', env')
 
+
 -- NOT
 stp (NotV (BoolV True), env)  = Just (BoolV False, env)
 stp (NotV (BoolV False), env) = Just (BoolV True, env)
@@ -192,13 +185,21 @@ stp (NotV e, env)
   | not (isValueV e) = do
       (e', env') <- stp (e, env)
       Just (NotV e', env')
+stp (NotV e, env) | isValueV e = Nothing
 
--- Condicional
-stp (If0V (NumV 0) t e, env) = Just (t, env)
-stp (If0V (NumV n) t e, env) = Just (e, env)
-stp (If0V c t e, env) = do
-    (c', env') <- stp (c, env)
-    return (If0V c' t e, env')
+
+--Condicional 
+
+-- condición ya es True
+stp (IfV (BoolV True) t e, env) = Just (t, env)
+
+-- condición ya es False
+stp (IfV (BoolV False) t e, env) = Just (e, env)
+
+--condición todavía no evaluada
+stp (IfV c t e, env) = do
+    (c', env') <- stp (c, env)  -- evaluamos un paso de la condición
+    return (IfV c' t e, env')   -- reconstruimos el IfV con la condición parcialmente evaluada
 
 -- Pares
 stp (PairV a b, env)
@@ -234,16 +235,31 @@ stp (TailV xs, env) = do
     (xs', env') <- stp (xs, env)
     return (TailV xs', env')
 
--- Aplicación de funciones
-stp (AppV (ClosureV p body envC) args, env)
-    | all isValueV args = Just (body, zip p args ++ envC)
+--App
+
 stp (AppV f args, env)
-    | not (all isValueV args) = do
-        (args', env') <- stpArgs args env
-        return (AppV f args', env')
-stp (AppV f args, env) = do
-    (f', env') <- stp (f, env)
-    return (AppV f' args, env')
+  | not (isValueV f) = do
+      (f', env') <- stp (f, env)
+      return (AppV f' args, env')
+
+stp (AppV f args, env)
+  | any (not . isValueV) args = do
+      (args', env') <- stpArgs args env
+      return (AppV f args', env')
+
+stp (AppV (ClosureV ps body envC) args, _)
+  | length ps == length args
+  , all isValueV args = Just (body, zip ps args ++ envC)
+
+
+
+stp (AppV (ClosureV ["f"] body envC) [arg], _) 
+  | isValueV arg =
+      let recEnv = ("f", ClosureV ["f"] body (("f", ClosureV ["f"] body envC) : envC)) : envC
+      in Just (body, zip ["f"] [arg] ++ recEnv)
+
+stp (AppV f args, env) | isValueV f && all isValueV args = Nothing
+
 
 stpArgs :: [ASAValues] -> Env -> Maybe ([ASAValues], Env)
 stpArgs [] env = Just ([], env)

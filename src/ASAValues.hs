@@ -29,7 +29,7 @@ data ASAValues
     | NotV ASAValues
 
 
-    | If0V ASAValues ASAValues ASAValues
+    | IfV ASAValues ASAValues ASAValues
 
     -- Pares y listas
     | PairV ASAValues ASAValues
