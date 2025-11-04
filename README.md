@@ -99,8 +99,7 @@ Let: paralelo ⇒ App (Lambda vars body) vals.
 
 Let*: secuencial ⇒ lambdas anidadas.
 
-LetRec: forma disponible; el atado recursivo completo depende de la estrategia elegida (fix-point/combinador o entorno auto-referencial). Puedes activarlo cuando lo necesites.
-
+LetRec: forma disponible; el atado recursivo completo depende de la estrategia elegida (fix-point/combinador o entorno auto-referencial).
 
 Desugar.hs:
 
