@@ -1,7 +1,7 @@
 {
 module Parser where
 import SASA
-import Lexer    -- token type comes from here
+import Lexer    -- token type comes from aquí
 
 -- El parser generado devolverá un SASA
 }
@@ -56,7 +56,6 @@ import Lexer    -- token type comes from here
 
 %%
 
--- La producción inicial devuelve un SASA
 SASA
   : Expr                                  { $1 }
   ;
@@ -67,27 +66,27 @@ Expr
   | TOKENBOOLEANO                          { BoolS $1 }
   | TOKENIDENTIFICADOR                     { VarS $1 }
 
-  -- Operaciones binarias en prefijo: (+ e1 e2)
-  | TOKENPARENTESISIZQUIERDO TOKENSUMA Expr Expr TOKENPARENTESISDERECHO
-                                           { AddS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENRESTA Expr Expr TOKENPARENTESISDERECHO
-                                           { SubS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENMULTIPLICACION Expr Expr TOKENPARENTESISDERECHO
-                                           { MulS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENDIVISION Expr Expr TOKENPARENTESISDERECHO
-                                           { DivS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENIGUAL Expr Expr TOKENPARENTESISDERECHO
-                                           { EqS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENMENORQUE Expr Expr TOKENPARENTESISDERECHO
-                                           { LtS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENMAYORQUE Expr Expr TOKENPARENTESISDERECHO
-                                           { GtS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENMENORIGUALQUE Expr Expr TOKENPARENTESISDERECHO
-                                           { LeqS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENMAYORIGUALQUE Expr Expr TOKENPARENTESISDERECHO
-                                           { GeqS $3 $4 }
-  | TOKENPARENTESISIZQUIERDO TOKENDIFERENTEQUE Expr Expr TOKENPARENTESISDERECHO
-                                           { NeqS $3 $4 }
+  -- Operaciones variádicas: (+ e1 e2 ...), etc.
+  | TOKENPARENTESISIZQUIERDO TOKENSUMA ExprList TOKENPARENTESISDERECHO
+                                           { AddS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENRESTA ExprList TOKENPARENTESISDERECHO
+                                           { SubS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENMULTIPLICACION ExprList TOKENPARENTESISDERECHO
+                                           { MulS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENDIVISION ExprList TOKENPARENTESISDERECHO
+                                           { DivS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENIGUAL ExprList TOKENPARENTESISDERECHO
+                                           { EqS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENMENORQUE ExprList TOKENPARENTESISDERECHO
+                                           { LtS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENMAYORQUE ExprList TOKENPARENTESISDERECHO
+                                           { GtS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENMENORIGUALQUE ExprList TOKENPARENTESISDERECHO
+                                           { LeqS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENMAYORIGUALQUE ExprList TOKENPARENTESISDERECHO
+                                           { GeqS $3 }
+  | TOKENPARENTESISIZQUIERDO TOKENDIFERENTEQUE ExprList TOKENPARENTESISDERECHO
+                                           { NeqS $3 }
 
   -- Unarios y otras operaciones nativas
   | TOKENPARENTESISIZQUIERDO TOKENMASUNO Expr TOKENPARENTESISDERECHO
@@ -99,14 +98,19 @@ Expr
   | TOKENPARENTESISIZQUIERDO TOKENPOTENCIA Expr Expr TOKENPARENTESISDERECHO
                                            { ExptS $3 $4 }
 
+ -- Aplicación general: (f arg1 arg2 ...)
+  | TOKENPARENTESISIZQUIERDO Expr ExprList TOKENPARENTESISDERECHO
+                                           { AppS $2 $3 }
+
   -- Pares, fst, snd
   | TOKENPARENTESISIZQUIERDO TOKENPRIMERO Expr TOKENPARENTESISDERECHO
                                            { FstS $3 }
   | TOKENPARENTESISIZQUIERDO TOKENSEGUNDO Expr TOKENPARENTESISDERECHO
                                            { SndS $3 }
-  | TOKENPARENTESISIZQUIERDO TOKENPARENTESISIZQUIERDO Expr Expr TOKENPARENTESISDERECHO TOKENPARENTESISDERECHO
-                                           { PairS $3 $4 } -- alternativa rara: (( e1 e2 )) pero mejor dejar PairS manual
 
+  -- ELIMINADA: la regla conflictiva de PairS
+  
+  
   -- Listas literales: [e1, e2, e3]
   | TOKENCORCHETEIZQUIERDO ListElems TOKENCORCHETEDERECHO
                                            { ListS $2 }
@@ -143,13 +147,11 @@ Expr
   | TOKENPARENTESISIZQUIERDO TOKENLAMBDA TOKENPARENTESISIZQUIERDO ParamList TOKENPARENTESISDERECHO Expr TOKENPARENTESISDERECHO
                                            { LambdaS $4 $6 }
 
-  -- Aplicación general: (f arg1 arg2 ...)
-  | TOKENPARENTESISIZQUIERDO Expr ExprList TOKENPARENTESISDERECHO
-                                           { AppS $2 $3 }
+
 
   ;
 
--- Lista de expresiones (para aplicaciones)
+-- Lista de expresiones (para operadores y aplicaciones)
 ExprList
   :                                         { [] }
   | Expr ExprList                           { $1 : $2 }
@@ -176,7 +178,6 @@ BindingList
   : TOKENPARENTESISIZQUIERDO ManyBinding TOKENPARENTESISDERECHO     { $2 }
   ;
 
--- ManyBinding -> uno o más bindings concatenados como (id expr) (id expr) ...
 ManyBinding
   : Binding ManyBinding                     { $1 : $2 }
   | Binding                                 { [$1] }
@@ -194,7 +195,7 @@ CondBranchList
 
 ManyCondBranch
   : CondBranch ManyCondBranch               { $1 : $2 }
-  | CondBranch                               { [$1] }
+  | CondBranch                              { [$1] }
   ;
 
 CondBranch

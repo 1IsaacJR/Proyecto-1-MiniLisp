@@ -250,7 +250,13 @@ stp (AppV f args, env)
 stp (AppV (ClosureV ps body envC) args, _)
   | length ps == length args
   , all isValueV args = Just (body, zip ps args ++ envC)
-
+  
+stp (AppV (ClosureV [f] body env) args, _)
+  | length [f] == length args
+  , all isValueV args =
+      let self = ClosureV [f] body env  -- La función se referencia a sí misma
+          newEnv = zip [f] args ++ [(f, self)] ++ env
+      in Just (body, newEnv)
 
 
 stp (AppV (ClosureV ["f"] body envC) [arg], _) 
