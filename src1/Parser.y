@@ -49,6 +49,8 @@ import Lexer    -- token type comes from aquí
   TOKENMENORIGUALQUE       { TOKENMENORIGUALQUE }
   TOKENMAYORIGUALQUE       { TOKENMAYORIGUALQUE }
   TOKENDIFERENTEQUE        { TOKENDIFERENTEQUE }
+  --Se agrega token pair
+  TOKENPAIR                { TOKENPAIR }
 
   TOKENBOOLEANO            { TOKENBOOLEANO $$ }
   TOKENENTERO              { TOKENENTERO $$ }
@@ -107,6 +109,9 @@ Expr
                                            { FstS $3 }
   | TOKENPARENTESISIZQUIERDO TOKENSEGUNDO Expr TOKENPARENTESISDERECHO
                                            { SndS $3 }
+  -- Se agrega token pair
+  | TOKENPARENTESISIZQUIERDO TOKENPAIR Expr Expr TOKENPARENTESISDERECHO
+                                          { PairS $3 $4 }
 
   -- ELIMINADA: la regla conflictiva de PairS
   

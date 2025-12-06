@@ -30,6 +30,8 @@ $white+                        ;
 "snd"                          { \_ -> TOKENSEGUNDO }
 "head"                         { \_ -> TOKENCABEZA }
 "tail"                         { \_ -> TOKENCOLA }
+-- Se agrega token pair
+"pair"                         { \_ -> TOKENPAIR }
 "add1"                         { \_ -> TOKENMASUNO }
 "sub1"                         { \_ -> TOKENMENOSUNO }
 "sqrt"                         { \_ -> TOKENRAIZCUADRADA }
@@ -60,7 +62,8 @@ data Token
     | TOKENIF | TOKENIFCERO | TOKENCOND | TOKENELSE
     | TOKENLAMBDA
     | TOKENPRIMERO | TOKENSEGUNDO
-    | TOKENCABEZA | TOKENCOLA
+    -- Se agrega token pair
+    | TOKENCABEZA | TOKENCOLA | TOKENPAIR  
     | TOKENMASUNO | TOKENMENOSUNO | TOKENRAIZCUADRADA | TOKENPOTENCIA
     | TOKENSUMA | TOKENRESTA | TOKENMULTIPLICACION | TOKENDIVISION
     | TOKENIGUAL | TOKENMENORQUE | TOKENMAYORQUE
